@@ -48,3 +48,9 @@ where `R_J` is Jupiter's mean radius. This is a reference-frame transformation, 
 ## Export
 
 The app can export an animated GIF and a text simulation protocol.
+
+## Default view
+
+The left Solar-System panel now starts with `Inner planets` as the default displayed region. The user can still switch to `To Jupiter` or `All planets` in the sidebar.
+
+Výchozí zobrazená oblast levého panelu Sluneční soustavy je nyní `Inner planets` / vnitřní planety. Uživatel může v sidebaru stále přepnout na `To Jupiter` nebo `All planets`.

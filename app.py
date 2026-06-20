@@ -117,7 +117,7 @@ LANG_OPTIONS = ("English", "Čeština")
 TEXT = {
     "en": {
         "title": "Solar System and Jupiter's Galilean moons",
-        "build": "Build: solar + Galilean moons v1",
+        "build": "Build: solar + Galilean moons v2 (Inner planets default)",
         "what": "What this app computes",
         "reset": "Reset to initial values",
         "global": "Global controls",
@@ -164,7 +164,7 @@ TEXT = {
     },
     "cs": {
         "title": "Sluneční soustava a Galileovy měsíce Jupiteru",
-        "build": "Build: solar + Galileovy měsíce v1",
+        "build": "Build: solar + Galileovy měsíce v2 (výchozí vnitřní planety)",
         "what": "Co aplikace počítá",
         "reset": "Obnovit výchozí hodnoty",
         "global": "Globální ovládání",
@@ -638,7 +638,7 @@ DEFAULTS = {
     "n_frames": 360,
     "log10_rtol": -8.0,
     "moon_plane_tilt_deg": 0.0,
-    "region": "To Jupiter",
+    "region": "Inner planets",
     "jupiter_halfwidth_rj": 32.0,
     "trail_frames": 160,
     "max_anim_frames": 180,
