@@ -54,3 +54,15 @@ The app can export an animated GIF and a text simulation protocol.
 The left Solar-System panel now starts with `Inner planets` as the default displayed region. The user can still switch to `To Jupiter` or `All planets` in the sidebar.
 
 Výchozí zobrazená oblast levého panelu Sluneční soustavy je nyní `Inner planets` / vnitřní planety. Uživatel může v sidebaru stále přepnout na `To Jupiter` nebo `All planets`.
+
+## Recurrence / revival-like indicator
+
+This version adds a visible recurrence diagnostic below the main 3D animation.  In the Jupiter-centered frame the app computes
+
+```text
+D_J(t) = RMS distance between the current relative configuration and the initial relative configuration
+```
+
+in units of Jupiter radii.  Small local minima of this curve mark classical recurrence-like moments: the selected group of bodies is again close to its initial visual arrangement in Jupiter's frame.
+
+This is not a quantum revival.  It is a classical near-return of orbital phases/configuration in a system made of several nearly periodic motions.  The user can choose whether the diagnostic uses the Galilean moons only, the Sun plus the inner planets and Jupiter, or all bodies.

@@ -117,7 +117,7 @@ LANG_OPTIONS = ("English", "Čeština")
 TEXT = {
     "en": {
         "title": "Solar System and Jupiter's Galilean moons",
-        "build": "Build: solar + Galilean moons v2 (Inner planets default)",
+        "build": "Build: solar + Galilean moons v3 (recurrence indicator)",
         "what": "What this app computes",
         "reset": "Reset to initial values",
         "global": "Global controls",
@@ -159,12 +159,22 @@ TEXT = {
         "metrics": "Diagnostics",
         "energy_drift": "Relative Newtonian energy drift",
         "min_sep": "Minimum separation [AU]",
+        "recurrence": "Recurrence / revival-like indicator",
+        "recurrence_set": "Configuration used for recurrence indicator",
+        "rec_galilean": "Galilean moons only",
+        "rec_inner": "Sun + inner planets + Jupiter",
+        "rec_all": "All bodies",
+        "rec_yaxis": "RMS distance from initial Jupiter-centered configuration [R_J]",
+        "rec_help": "Small values mean that the selected relative configuration is close to its initial shape again. This is a classical recurrence-like diagnostic, not a quantum revival.",
+        "rec_best": "Best near-return",
+        "rec_time": "near-return time",
+        "rec_value": "distance",
         "note": "The Galilean-moon panel is Jupiter-centered: r' = r - r_Jupiter. This is a coordinate transformation of the same Newtonian solution, not a different force law.",
         "jupiter_scale_note": "Right-panel distances are shown in Jupiter radii R_J. The four Galilean moons are integrated together with the Sun and planets.",
     },
     "cs": {
         "title": "Sluneční soustava a Galileovy měsíce Jupiteru",
-        "build": "Build: solar + Galileovy měsíce v2 (výchozí vnitřní planety)",
+        "build": "Build: solar + Galileovy měsíce v3 (indikátor návratu)",
         "what": "Co aplikace počítá",
         "reset": "Obnovit výchozí hodnoty",
         "global": "Globální ovládání",
@@ -206,6 +216,16 @@ TEXT = {
         "metrics": "Diagnostika",
         "energy_drift": "Relativní drift Newtonovské energie",
         "min_sep": "Minimální separace [AU]",
+        "recurrence": "Indikátor návratu / revival-like chování",
+        "recurrence_set": "Konfigurace pro indikátor návratu",
+        "rec_galilean": "Pouze Galileovy měsíce",
+        "rec_inner": "Slunce + vnitřní planety + Jupiter",
+        "rec_all": "Všechna tělesa",
+        "rec_yaxis": "RMS vzdálenost od počáteční konfigurace v soustavě Jupiteru [R_J]",
+        "rec_help": "Malé hodnoty znamenají, že vybraná relativní konfigurace je znovu blízko počátečnímu tvaru. Jde o klasický recurrence-like indikátor, ne o kvantový revival.",
+        "rec_best": "Nejlepší téměř návrat",
+        "rec_time": "čas téměř návratu",
+        "rec_value": "vzdálenost",
         "note": "Panel Galileových měsíců je centrovaný na Jupiter: r' = r - r_Jupiter. Jde o souřadnicovou transformaci téhož Newtonovského řešení, ne o jiný silový zákon.",
         "jupiter_scale_note": "V pravém panelu jsou vzdálenosti v poloměrech Jupiteru R_J. Čtyři Galileovy měsíce se integrují společně se Sluncem a planetami.",
     },
@@ -628,6 +648,90 @@ def make_protocol(times: np.ndarray, frames: np.ndarray, vframes: np.ndarray, ma
         lines.append(f"  v_final [AU/yr] = ({v1[0]:.16e}, {v1[1]:.16e}, {v1[2]:.16e})")
     return "\n".join(lines) + "\n"
 
+
+# =============================================================================
+# Recurrence / revival-like diagnostic
+# =============================================================================
+
+RECURRENCE_OPTIONS = ("Galilean moons only", "Sun + inner planets + Jupiter", "All bodies")
+
+
+def recurrence_label(option: str) -> str:
+    mapping = {
+        "Galilean moons only": tr("rec_galilean"),
+        "Sun + inner planets + Jupiter": tr("rec_inner"),
+        "All bodies": tr("rec_all"),
+    }
+    return mapping.get(option, option)
+
+
+def recurrence_indices(option: str) -> list[int]:
+    if option == "Sun + inner planets + Jupiter":
+        return [SUN_IDX, MERCURY_IDX, MERCURY_IDX + 1, MERCURY_IDX + 2, MERCURY_IDX + 3, JUPITER_IDX]
+    if option == "All bodies":
+        return list(range(len(BODIES)))
+    return list(MOON_INDICES)
+
+
+def recurrence_distance_jupiter_frame(frames: np.ndarray, indices: Sequence[int]) -> np.ndarray:
+    """RMS near-return distance in the Jupiter-centered frame, in Jupiter radii."""
+    rel = (frames[:, indices, :] - frames[:, JUPITER_IDX:JUPITER_IDX + 1, :]) / JUPITER_RADIUS_AU
+    rel0 = rel[0:1, :, :]
+    delta = rel - rel0
+    return np.sqrt(np.mean(np.sum(delta * delta, axis=2), axis=1))
+
+
+def local_minima_indices(values: np.ndarray, max_count: int = 5, min_index: int = 2) -> np.ndarray:
+    """Return up to max_count local minima sorted by value, skipping t=0."""
+    if len(values) < 3:
+        return np.array([], dtype=int)
+    candidates = []
+    for i in range(max(min_index, 1), len(values) - 1):
+        if values[i] <= values[i - 1] and values[i] <= values[i + 1]:
+            candidates.append(i)
+    if not candidates:
+        return np.array([], dtype=int)
+    candidates = np.array(candidates, dtype=int)
+    order = np.argsort(values[candidates])
+    return candidates[order[:max_count]]
+
+
+def make_recurrence_figure(times: np.ndarray, frames: np.ndarray, option: str) -> tuple[go.Figure, np.ndarray, np.ndarray]:
+    indices = recurrence_indices(option)
+    d = recurrence_distance_jupiter_frame(frames, indices)
+    minima = local_minima_indices(d, max_count=6, min_index=max(2, len(d) // 100))
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=times * DAYS_PER_YEAR,
+            y=d,
+            mode="lines",
+            line=dict(width=2),
+            name="D_J(t)",
+            hovertemplate="t=%{x:.2f} days<br>D_J=%{y:.4g} R_J<extra></extra>",
+        )
+    )
+    if len(minima):
+        fig.add_trace(
+            go.Scatter(
+                x=times[minima] * DAYS_PER_YEAR,
+                y=d[minima],
+                mode="markers",
+                marker=dict(size=8),
+                name="local minima" if lang_code() == "en" else "lokální minima",
+                hovertemplate="t=%{x:.2f} days<br>D_J=%{y:.4g} R_J<extra></extra>",
+            )
+        )
+    fig.update_layout(
+        height=330,
+        margin=dict(l=10, r=10, t=35, b=10),
+        xaxis_title="time [days]" if lang_code() == "en" else "čas [dny]",
+        yaxis_title=tr("rec_yaxis"),
+        showlegend=True,
+    )
+    return fig, d, minima
+
 # =============================================================================
 # Session state and UI
 # =============================================================================
@@ -648,6 +752,7 @@ DEFAULTS = {
     "moon_px": 10.0,
     "min_px": 4.0,
     "show_names": True,
+    "recurrence_set": "Galilean moons only",
     "gif_frames": 90,
     "gif_fps": 12,
 }
@@ -691,6 +796,14 @@ Pravý panel tedy není jiný fyzikální model. Je to jen změna vztažné sous
 
 Počáteční podmínky planet jsou zjednodušené kruhové dráhy z průměrných vzdáleností. Počáteční podmínky Galileových měsíců používají střední prvky JPL/JUP365: hlavní poloosy, fáze, sklony a periody. Hmotnosti měsíců jsou odvozené z hodnot JPL \(GM\). Nejde o přesnou efemeridu JPL Horizons, ale o výukovou numerickou vizualizaci.
 
+Aplikace také počítá jednoduchý indikátor návratu konfigurace v Jupiterově soustavě. Pro zvolenou množinu těles se porovnává aktuální relativní konfigurace s počáteční konfigurací:
+            """
+        )
+        st.latex(r"D_J(t)=\sqrt{\frac{1}{N}\sum_i\left|\left[\mathbf r_i(t)-\mathbf r_J(t)\right]-\left[\mathbf r_i(0)-\mathbf r_J(0)\right]\right|^2}\,/R_J")
+        st.markdown(
+            """
+Lokální minima této veličiny ukazují klasické „recurrence-like“ okamžiky, kdy se obraz systému znovu podobá dřívějšímu uspořádání. Není to kvantový revival, ale klasický návrat fáze/konfigurace v systému složeném z několika téměř periodických pohybů.
+
 Numerická integrace používá `scipy.integrate.solve_ivp` s metodou DOP853 a vektorované NumPy vyhodnocení Newtonovských zrychlení. Slidery `Simulated time`, `Stored time frames` a `DOP853 tolerance` mění numerický výpočet. Vizuální velikosti markerů mění pouze vykreslení.
             """
         )
@@ -708,6 +821,14 @@ The left panel shows barycentric Solar-System coordinates. The right panel shows
 The right panel is not a different physical model. It is only a change of reference frame: Jupiter is chosen as the center. This illustrates why it is natural to talk about Jupiter's system of moons, even though the whole system still moves in the Solar-System barycentric frame.
 
 Planet initial conditions are simplified circular orbits based on mean distances. The Galilean-moon initial conditions use JPL/JUP365 mean elements: semimajor axes, phases, inclinations and periods. Moon masses are derived from JPL \(GM\) values. This is not a high-precision JPL Horizons ephemeris; it is an educational numerical visualization.
+
+The app also computes a simple Jupiter-frame recurrence indicator. For a selected set of bodies, it compares the current relative configuration with the initial one:
+            """
+        )
+        st.latex(r"D_J(t)=\sqrt{\frac{1}{N}\sum_i\left|\left[\mathbf r_i(t)-\mathbf r_J(t)\right]-\left[\mathbf r_i(0)-\mathbf r_J(0)\right]\right|^2}\,/R_J")
+        st.markdown(
+            """
+Local minima of this quantity mark classical recurrence-like moments when the visual pattern becomes similar to an earlier configuration. This is not a quantum revival; it is a classical near-return of phases/configuration in a system built from several almost periodic motions.
 
 The numerical integration uses `scipy.integrate.solve_ivp` with the DOP853 method and vectorized NumPy evaluation of Newtonian accelerations. `Simulated time`, `Stored time frames` and `DOP853 tolerance` change the numerical computation. Marker-size sliders only redraw the plot.
             """
@@ -735,6 +856,7 @@ st.sidebar.slider(tr("planet_size"), 4.0, 28.0, step=0.5, key="planet_px")
 st.sidebar.slider(tr("moon_size"), 4.0, 24.0, step=0.5, key="moon_px")
 st.sidebar.slider(tr("min_size"), 1.0, 10.0, step=0.5, key="min_px")
 st.sidebar.checkbox(tr("show_names"), key="show_names")
+st.sidebar.selectbox(tr("recurrence_set"), RECURRENCE_OPTIONS, key="recurrence_set", format_func=recurrence_label)
 
 with st.spinner(tr("spinner")):
     times, frames, vframes, masses, diag = simulate_cached(
@@ -766,6 +888,17 @@ c1, c2, c3 = st.columns(3)
 c1.metric(tr("energy_drift"), f"{diag['energy_drift']:.3e}")
 c2.metric("DOP853 function evaluations", f"{diag['nfev']:,}")
 c3.metric("Stored frames", f"{len(times):,}")
+
+st.subheader(tr("recurrence"))
+st.caption(tr("rec_help"))
+rec_fig, rec_d, rec_minima = make_recurrence_figure(times, frames, st.session_state.recurrence_set)
+st.plotly_chart(rec_fig, use_container_width=True, config={"displayModeBar": True})
+if len(rec_minima):
+    best = int(rec_minima[0])
+    r1, r2, r3 = st.columns(3)
+    r1.metric(tr("rec_best"), f"#{best}")
+    r2.metric(tr("rec_time"), f"{times[best] * DAYS_PER_YEAR:.2f} days")
+    r3.metric(tr("rec_value"), f"{rec_d[best]:.3g} R_J")
 
 st.subheader(tr("export"))
 g1, g2 = st.columns(2)
